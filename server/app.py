@@ -31,12 +31,13 @@
 
 # Status code reference: https://httpstatusdogs.com/
 
-from flask import Flask, jsonify, make_response, request
+from flask import Flask, jsonify, make_response, request, abort
 from flask_migrate import Migrate
 
 from flask_restful import Api, Resource
 
 # 1. Import NotFound from werkzeug.exceptions for error handling
+from werkzeug.exceptions import NotFound
 
 from models import db, Service, Show
 
@@ -55,6 +56,11 @@ api = Api(app)
     # 2.1 Create the decorator and pass in NotFound as a parameter
     # 2.2 Use make_response to create a response with a message and status of 404 (not found)
     # 2.3 Return the response
+
+@app.errorhandler(NotFound)
+def handle_not_found(e):
+    response = make_response("Not Found - The resource you're looking for does not exist!", 404)
+    return response
 
 class Services(Resource):
     def get(self):
@@ -106,11 +112,44 @@ api.add_resource(Shows, '/shows')
 
 class ServiceById(Resource):
     def get(self, id):
-        service = Service.query.filter(Service.id == id).first().to_dict()
+        service = Service.query.filter(Service.id == id).first()
 
 # 3a. If the service is not found, raise an exception
+        if not service:
+            abort(404, "The Service you are looking for could not be found!")
 
-        response = make_response(service, 200)
+        service_dict = service.to_dict()
+        response = make_response(service_dict, 200)
+        return response
+
+    def patch(self, id):
+        # import ipdb; ipdb.set_trace()
+        service = Service.query.filter(Service.id == id).first()
+
+        if not service:
+            abort(404, "The Service you are looking for could not be found!")
+
+        request_json = request.get_json()
+        for key in request_json:
+            # import ipdb; ipdb.set_trace()
+            setattr(service, key, request_json[key])
+
+        db.session.add(service)
+        db.session.commit()
+
+        response = make_response(service.to_dict(), 200)
+        return response
+
+    def delete(self, id):
+        service = Service.query.filter(Service.id == id).first()
+
+        if not service:
+            abort(404, "The Service you are looking for could not be found!")
+
+        db.session.delete(service)
+        db.session.commit()
+
+        response = make_response('Successfully Deleted', 204)
         return response
 
 api.add_resource(ServiceById, '/services/<int:id>')
@@ -120,8 +159,38 @@ class ShowById(Resource):
         show = Show.query.filter(Show.id == id).first()
 
 # 3b. If the show is not found, raise an exception
+        if not show:
+            abort(404, "The Show you are looking for could not be found!")
 
         response = make_response(show.to_dict(), 200)
+        return response
+
+    def patch(self, id):
+        show = Show.query.filter(Show.id == id).first()
+
+        if not show:
+            abort(404, "The Show you are looking for could not be found!")
+
+        request_json = request.get_json()
+        for key in request_json:
+            setattr(show, key, request_json[key])
+
+        db.session.add(show)
+        db.session.commit()
+
+        response = make_response(show.to_dict(), 200)
+        return response
+
+    def delete(self, id):
+        show = Show.query.filter(Show.id == id).first()
+
+        if not show:
+            abort(404, "the show you are looking for does not exist")
+
+        db.session.delete(show)
+        db.session.commit()
+
+        response = make_response('Successfully deleted', 204)
         return response
 
 api.add_resource(ShowById, '/shows/<int:id>')
